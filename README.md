@@ -16,7 +16,7 @@ Network           Testnet (Test SDF Network ; September 2015)
 
 `get_safety(asset)` is callable now, by any Soroban contract, atomically.
 [docs/integrating.md](docs/integrating.md) has a copy-pasteable gate and a
-worked example contract that is also deployed
+worked example contract that is also deployed on testnet
 (`CAL5VYSWLKG367D5IYGI57XH7EMN5PLJ4CD6K3MO2HJBYYKEKPG3NKRX`);
 [docs/deployment.md](docs/deployment.md) has the transaction hashes, the
 attested assets, and the live fail-closed checks.

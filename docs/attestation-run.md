@@ -232,8 +232,9 @@ three of the ten on-chain hashes exposed the same way.
 
 ## Fail-closed, demonstrated
 
-Verified live on 2026-09-05 using `native` XLM as a control that is deliberately
-never attested (`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`).
+Verified live on testnet on 2026-09-05 using `native` XLM as a control that is
+deliberately never attested (testnet SAC
+`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`).
 
 | Attempted | Result | Why that is correct |
 | --- | --- | --- |

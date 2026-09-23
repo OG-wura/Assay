@@ -6,6 +6,7 @@ whose issuer can take it back.
 Everything here runs against the live testnet deployment:
 
 ```
+# Assay registry on Stellar testnet
 CBK4FBIHMDTXCUPE4E3ZDVSFJSCY5FJETTKNIQPN4LFJIKKIBLKIXQ73
 ```
 
@@ -226,6 +227,7 @@ deploying to; do not copy one across.
 Three attested assets, and one that is deliberately never attested:
 
 ```sh
+# Testnet deployment; every address below is network-specific.
 GATE=CAL5VYSWLKG367D5IYGI57XH7EMN5PLJ4CD6K3MO2HJBYYKEKPG3NKRX
 
 # KALE — attested clear on 2026-09-16
