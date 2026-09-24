@@ -90,6 +90,13 @@ const (
 	MechDomainUnverified Mechanic = 1 << 4
 	// MechBlocklisted means a curated source flagged the issuer or its domain.
 	MechBlocklisted Mechanic = 1 << 5
+	// MechTrustlineClawbackEnabled means the specific holder's trustline has
+	// is_clawback_enabled set. Distinct from MechClawbackEnabled, which is
+	// the issuer-level flag applicable to new trustlines.
+	MechTrustlineClawbackEnabled Mechanic = 1 << 6
+	// MechTrustlineDeauthorized means the specific holder's trustline has
+	// is_authorized unset: the holder cannot currently transact.
+	MechTrustlineDeauthorized Mechanic = 1 << 7
 )
 
 // ConfiscationMask covers the mechanics that let an issuer take a balance.
@@ -107,6 +114,8 @@ var names = []struct {
 	{MechFlagsLocked, "auth_immutable"},
 	{MechDomainUnverified, "domain_unverified"},
 	{MechBlocklisted, "blocklisted"},
+	{MechTrustlineClawbackEnabled, "trustline_clawback_enabled"},
+	{MechTrustlineDeauthorized, "trustline_deauthorized"},
 }
 
 // Names returns the set bits as their ledger flag names, in bit order.
