@@ -9,10 +9,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/use-assay/assay/internal/api"
 	"github.com/use-assay/assay/internal/attest"
+	"github.com/use-assay/assay/internal/mechanics"
 	"github.com/use-assay/assay/internal/scan"
 )
 
@@ -27,6 +29,8 @@ func usage() {
 	fmt.Fprint(os.Stderr, `usage:
   assay scan CODE-ISSUER          classify one asset and print the report as JSON
   assay attestation CODE-ISSUER   print the on-chain attest() arguments for one asset
+  assay history [-guarantee] [-raw] CODE-ISSUER
+                                  print the asset's observation history
   assay serve [-addr]             serve the HTTP API and UI
 `)
 }
@@ -44,6 +48,8 @@ func run(args []string) error {
 		return runScan(args[1:])
 	case "attestation":
 		return runAttestation(args[1:])
+	case "history":
+		return runHistory(args[1:])
 	case "serve":
 		return runServe(args[1:], log)
 	default:
@@ -119,6 +125,119 @@ func runAttestation(args []string) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(params)
+}
+
+func runHistory(args []string) error {
+	fs := flag.NewFlagSet("history", flag.ContinueOnError)
+	guarantee := fs.Bool("guarantee", false, "exit non-zero when there is no history")
+	raw := fs.Bool("raw", false, "print only the history, tab-separated, for scripting")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("history takes exactly one asset (CODE-ISSUER)")
+	}
+
+	asset, err := scan.ParseAsset(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	report, err := scan.New().Scan(ctx, asset)
+	if err != nil {
+		return err
+	}
+
+	hist := history(report)
+
+	if len(hist) == 0 {
+		msg := "assay history: no observations for " + asset.String()
+		if *raw {
+			fmt.Println(msg)
+			if *guarantee {
+				return fmt.Errorf("no history")
+			}
+			return nil
+		}
+		fmt.Println(msg)
+		if *guarantee {
+			return fmt.Errorf("no history")
+		}
+		return nil
+	}
+
+	if *raw {
+		for _, h := range hist {
+			fmt.Printf("%s\t%s\t%s\t%s\n", h.Asset, h.Severity, h.Transition, h.Reason)
+		}
+		return nil
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(hist)
+}
+
+// history extracts the observation history from a report. The observations are
+// the evidence entries, in time order. When there are none, it returns an empty
+// slice so the caller can print the clear message.
+func history(rep *mechanics.Report) []historyEntry {
+	if rep == nil {
+		return nil
+	}
+	hist := make([]historyEntry, 0, len(rep.Evidence))
+	for _, e := range rep.Evidence {
+		hist = append(hist, historyEntry{
+			Asset:      rep.Asset.String(),
+			Severity:   rep.Severity.String(),
+			Transition: transition(e.Claim),
+			Reason:     e.Claim,
+			Time:       e.RetrievedAt,
+		})
+	}
+	return hist
+}
+
+// transition reduces a plain-language evidence claim to the term the
+// consumer prints: whatever the issuer was observed doing, or unknown when a
+// source did not answer.
+func transition(claim string) string {
+	if claim == "" {
+		return "unknown"
+	}
+	low := strings.ToLower(claim)
+	for _, s := range candidateTransitions {
+		if strings.Contains(low, s) {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+// candidateTransitions is the set of ways an observation can read in this
+// project. It is deliberately small: the history view does not re-derive the
+// verdict, it only reports what each observation says.
+var candidateTransitions = []string{
+	"malicious",
+	"listed as",
+	"blocked",
+	"unverified",
+	"not retrievable",
+	"credits",
+	"claims",
+	"borrow",
+	"pay",
+}
+
+type historyEntry struct {
+	Asset      string    `json:"asset"`
+	Severity   string    `json:"severity"`
+	Transition string    `json:"transition"`
+	Reason     string    `json:"reason"`
+	Time       time.Time `json:"time"`
 }
 
 func runServe(args []string, log *slog.Logger) error {

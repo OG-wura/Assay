@@ -1,6 +1,10 @@
 package sep1_test
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/use-assay/assay/internal/sep1"
@@ -86,5 +90,39 @@ func TestURLFor(t *testing.T) {
 		if got := sep1.URLFor(in); got != want {
 			t.Errorf("URLFor(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// roundTripperFunc adapts a function to http.RoundTripper.
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+// TestUserAgent pins the identity the scanner offers to domains it verifies
+// against. A specific string, not merely a non-empty one, because the
+// operators of the services we call filter on it. The stub transport answers
+// in place of the network so the test can inspect the request exactly as the
+// remote host would receive it.
+func TestUserAgent(t *testing.T) {
+	want := "assay/v0.1.0 (+https://github.com/use-assay/Assay)"
+
+	var ua string
+	rt := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		ua = req.Header.Get("User-Agent")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("")),
+			Header:     http.Header{},
+			Request:    req,
+		}, nil
+	})
+
+	f := sep1.NewFetcher()
+	f.HTTP = &http.Client{Transport: rt}
+	if _, err := f.Fetch(context.Background(), "example.com"); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if ua != want {
+		t.Errorf("User-Agent = %q, want %q", ua, want)
 	}
 }

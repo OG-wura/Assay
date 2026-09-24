@@ -23,6 +23,26 @@ const (
 	bodyListed = `{"address":"GAROH4EV3WVVTRQKEY43GZK3XSRBEYETRVZ7SVG5LHWOAANSMCTJBB3U","name":"Zeam.Money","domain":"zeam.money","tags":["issuer"]}`
 )
 
+// TestUserAgent pins the identity the scanner offers StellarExpert. A specific
+// string, not merely a non-empty one, because operators of the services we
+// call filter on it.
+func TestUserAgent(t *testing.T) {
+	want := "assay/v0.1.0 (+https://github.com/use-assay/Assay)"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("User-Agent"); got != want {
+			t.Errorf("User-Agent = %q, want %q", got, want)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(bodyUnlisted))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := stellarexpert.New(srv.URL)
+	if _, err := c.Directory(context.Background(), "GBBS25EGYQPGEZCGCFBKG4OAGFXU6DSOQBGTHELLJT3HZXZJ34HWS6XV"); err != nil {
+		t.Fatalf("Directory: %v", err)
+	}
+}
+
 func serve(t *testing.T, status int, body string) *stellarexpert.Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
