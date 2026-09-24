@@ -58,6 +58,27 @@ type Account struct {
 	Flags      Flags  `json:"flags"`
 }
 
+// TrustlineBalance is a single credit-trustline entry from the balances array
+// of Horizon's /accounts/{id} response.
+//
+// Field names are the Horizon wire names verified against
+// https://developers.stellar.org/api/horizon/resources/accounts (2026-09-24)
+// and the CAP-0035 specification. Do not rename them.
+type TrustlineBalance struct {
+	AssetType   string `json:"asset_type"`
+	AssetCode   string `json:"asset_code"`
+	AssetIssuer string `json:"asset_issuer"`
+	// IsAuthorized reports whether the issuer has authorized this trustline
+	// to transact (send and receive). An unauthorized trustline is frozen.
+	IsAuthorized bool `json:"is_authorized"`
+	// IsClawbackEnabled reports whether the issuer's clawback power applies
+	// to this specific trustline. Under CAP-0035 this flag is fixed when the
+	// trustline is created: a holder who opened before the issuer set
+	// auth_clawback_enabled is not exposed even if the issuer's account flag
+	// is currently set. SetTrustLineFlagsOp cannot add it retroactively.
+	IsClawbackEnabled bool `json:"is_clawback_enabled"`
+}
+
 // Client reads from a Horizon instance.
 type Client struct {
 	BaseURL string
@@ -102,6 +123,23 @@ func (c *Client) Account(ctx context.Context, id string) (*Account, error) {
 		return nil, err
 	}
 	return &a, nil
+}
+
+// Trustline returns the balance entry for code/issuer in the holder's account.
+// It returns ErrNotFound if the holder does not hold the asset.
+func (c *Client) Trustline(ctx context.Context, holder, code, issuer string) (*TrustlineBalance, error) {
+	var a struct {
+		Balances []TrustlineBalance `json:"balances"`
+	}
+	if err := c.get(ctx, "/accounts/"+url.PathEscape(holder), &a); err != nil {
+		return nil, err
+	}
+	for i, b := range a.Balances {
+		if b.AssetCode == code && b.AssetIssuer == issuer {
+			return &a.Balances[i], nil
+		}
+	}
+	return nil, fmt.Errorf("%w: %s does not hold %s-%s", ErrNotFound, holder, code, issuer)
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {
