@@ -21,6 +21,16 @@ const DefaultURL = "https://horizon.stellar.org"
 // ErrNotFound reports that Horizon has no record of the asset or account.
 var ErrNotFound = errors.New("horizon: not found")
 
+// Version is the tool version that every outbound client reports in its
+// User-Agent. Bump it alongside any scanner-version release; the API
+// documents the value in release notes.
+const Version = "v0.1.0"
+
+// defaultUserAgent is how Assay identifies itself to the public Horizon
+// instance. It is a courtesy to the operators of sources Assay depends on
+// and makes automated traffic distinguishable from botnets and scanners.
+const defaultUserAgent = "assay/" + Version + " (+https://github.com/use-assay/Assay)"
+
 // Flags mirrors the issuer authorization flags exactly as Horizon names them.
 //
 // The field names are the wire names, verified against live Horizon responses
@@ -60,8 +70,9 @@ type Account struct {
 
 // Client reads from a Horizon instance.
 type Client struct {
-	BaseURL string
-	HTTP    *http.Client
+	BaseURL   string
+	HTTP      *http.Client
+	UserAgent string
 }
 
 // New returns a Client for the given Horizon base URL, defaulting to pubnet.
@@ -70,12 +81,17 @@ func New(baseURL string) *Client {
 		baseURL = DefaultURL
 	}
 	return &Client{
-		BaseURL: baseURL,
-		HTTP:    &http.Client{Timeout: 15 * time.Second},
+		BaseURL:   baseURL,
+		HTTP:      &http.Client{Timeout: 15 * time.Second},
+		UserAgent: defaultUserAgent,
 	}
 }
 
 // Asset returns the asset statistics record for code/issuer.
+//
+// If the ledger echoes a different code or issuer than the caller asked for,
+// the mismatch is fatal: every severity Assay reports comes from this record's
+// flags, and a record describing another asset put under this name fakes both.
 func (c *Client) Asset(ctx context.Context, code, issuer string) (*AssetStat, error) {
 	q := url.Values{}
 	q.Set("asset_code", code)
@@ -92,14 +108,30 @@ func (c *Client) Asset(ctx context.Context, code, issuer string) (*AssetStat, er
 	if len(page.Embedded.Records) == 0 {
 		return nil, fmt.Errorf("%w: asset %s-%s", ErrNotFound, code, issuer)
 	}
-	return &page.Embedded.Records[0], nil
+	rec := page.Embedded.Records[0]
+	if rec.AssetCode != code || rec.AssetIssuer != issuer {
+		return nil, fmt.Errorf(
+			"horizon: asset %s-%s echoed %s-%s",
+			code, issuer, rec.AssetCode, rec.AssetIssuer,
+		)
+	}
+	return &rec, nil
 }
 
 // Account returns the account record for the given account ID.
+//
+// The record Horizon echoes carries the very ID it serves, so asking for one
+// account cannot be answered by another. A mismatch is fatal, because every
+// flag Assay reads on that account is built into the scan.
 func (c *Client) Account(ctx context.Context, id string) (*Account, error) {
 	var a Account
 	if err := c.get(ctx, "/accounts/"+url.PathEscape(id), &a); err != nil {
 		return nil, err
+	}
+	if a.AccountID != id {
+		return nil, fmt.Errorf(
+			"horizon: account %s echoed %s", id, a.AccountID,
+		)
 	}
 	return &a, nil
 }
@@ -110,6 +142,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.UserAgent)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

@@ -22,6 +22,11 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// version is kept here so every outbound client reports the same tool
+// version in its User-Agent. Bump it alongside any scanner-version release;
+// the API documents the value in release notes.
+const version = "v0.1.0"
+
 // maxBody caps the stellar.toml read. Real files are a few KB; this stops a
 // hostile domain from streaming an unbounded body at the scanner.
 const maxBody = 1 << 20 // 1 MiB
@@ -90,12 +95,16 @@ func (d *Doc) LinkedCurrencies() int {
 
 // Fetcher retrieves stellar.toml documents.
 type Fetcher struct {
-	HTTP *http.Client
+	HTTP      *http.Client
+	UserAgent string
 }
 
 // NewFetcher returns a Fetcher with a bounded timeout.
 func NewFetcher() *Fetcher {
-	return &Fetcher{HTTP: &http.Client{Timeout: 15 * time.Second}}
+	return &Fetcher{
+		HTTP:      &http.Client{Timeout: 15 * time.Second},
+		UserAgent: "assay/" + version + " (+https://github.com/use-assay/Assay)",
+	}
 }
 
 // URLFor returns the SEP-1 well-known location for a domain.
@@ -114,6 +123,8 @@ func (f *Fetcher) Fetch(ctx context.Context, domain string) (*Doc, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", f.UserAgent)
+
 	resp, err := f.HTTP.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("sep1: fetch %s: %w", target, err)

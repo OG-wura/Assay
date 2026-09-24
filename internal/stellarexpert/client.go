@@ -25,6 +25,16 @@ import (
 // DefaultURL is the public StellarExpert API root.
 const DefaultURL = "https://api.stellar.expert"
 
+// version is kept here so every outbound client reports the same tool
+// version in its User-Agent. Bump it alongside any scanner-version release;
+// the API documents the value in release notes.
+const version = "v0.1.0"
+
+// defaultUserAgent is how Assay identifies itself to the public StellarExpert
+// API. It is a courtesy to the operators of sources Assay depends on and makes
+// automated traffic distinguishable from botnets and scanners.
+const defaultUserAgent = "assay/" + version + " (+https://github.com/use-assay/Assay)"
+
 // DirectoryEntry is a curated entry from StellarExpert's address directory,
 // the data set standardized by SEP-0037.
 type DirectoryEntry struct {
@@ -55,18 +65,20 @@ type BlockedDomain struct {
 
 // Client reads StellarExpert's curated data sets.
 type Client struct {
-	BaseURL string
-	HTTP    *http.Client
+	BaseURL   string
+	HTTP      *http.Client
+	UserAgent string
 }
 
-// New returns a Client for the given API root, defaulting to the public one.
+// New returns a Client for a given API root, defaulting to the public one.
 func New(baseURL string) *Client {
 	if baseURL == "" {
 		baseURL = DefaultURL
 	}
 	return &Client{
-		BaseURL: baseURL,
-		HTTP:    &http.Client{Timeout: 15 * time.Second},
+		BaseURL:   baseURL,
+		HTTP:      &http.Client{Timeout: 15 * time.Second},
+		UserAgent: defaultUserAgent,
 	}
 }
 
@@ -124,6 +136,7 @@ func (c *Client) get(ctx context.Context, target string, out any) (bool, error) 
 		return false, err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.UserAgent)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

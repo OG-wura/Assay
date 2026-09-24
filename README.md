@@ -58,6 +58,7 @@ carries an explicit, evaluated position on legitimate clawback use. See
 
 | Document | What's in it |
 | --- | --- |
+| [docs/cli.md](docs/cli.md) | The `assay` binary: scan, attestation, history, serve |
 | [docs/severity-model.md](docs/severity-model.md) | The judgment layer: severity levels, the legitimate-use carve-out, and why |
 | [docs/checks.md](docs/checks.md) | Each mechanic Assay checks, and what it can and cannot conclude |
 | [docs/contract-interface.md](docs/contract-interface.md) | `get_safety(asset)` design and the `evidence_hash` encoding |
