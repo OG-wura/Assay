@@ -71,10 +71,18 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	holder := r.URL.Query().Get("holder")
+	if holder != "" {
+		if err := scan.ValidateHolder(holder); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorBody{err.Error()})
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	report, err := s.Scanner.Scan(ctx, asset)
+	report, err := s.Scanner.ScanWithHolder(ctx, asset, holder)
 	if err != nil {
 		if errors.Is(err, horizon.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorBody{"asset not found on the ledger"})

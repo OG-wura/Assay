@@ -98,6 +98,16 @@ type Subject struct {
 	BlockedURL   string
 	BlockedErr   string
 
+	// Holder is the account ID of a specific holder when per-trustline analysis
+	// was requested. Empty when no holder was specified; the trustline check is
+	// not run in that case and behavior is identical to a no-holder scan.
+	Holder string
+	// HolderTrustline is the holder's balance entry for this asset. Populated
+	// when Holder is non-empty and the holder holds the asset.
+	// HolderTrustlineErr records why it was not available.
+	HolderTrustline    *horizon.TrustlineBalance
+	HolderTrustlineErr string
+
 	FetchedAt time.Time
 }
 
