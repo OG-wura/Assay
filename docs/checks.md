@@ -127,6 +127,16 @@ Note that the two sources are not interchangeable and neither is complete. When
 while blocked-domains returned `blocked=false` for the same domain. Consulting
 only one of them would have missed a confirmed scam.
 
+## Capability transitions
+
+The checks above answer a prospective question: what can this issuer do to a
+trustline opened now. Comparing two of those answers over time is a separate,
+pure computation in [`internal/temporal`](../internal/temporal): what capability
+bits were added or removed between two observations, and which axis — capability
+or reputation — moved severity. It performs no I/O and stores nothing. The
+representation and the on-demand-versus-stored decision are in
+[transitions.md](transitions.md).
+
 ## Adding a check
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md). The short version: implement the
