@@ -30,6 +30,18 @@ var codeRE = regexp.MustCompile(`^[A-Za-z0-9]{1,12}$`)
 // ErrBadAsset reports an unparseable asset identifier.
 var ErrBadAsset = errors.New("scan: invalid asset")
 
+// ErrBadHolder reports an invalid holder account ID.
+var ErrBadHolder = errors.New("scan: invalid holder account ID")
+
+// ValidateHolder checks that id is a valid Stellar ed25519 public key suitable
+// for use as a holder account ID.
+func ValidateHolder(id string) error {
+	if !issuerRE.MatchString(id) {
+		return fmt.Errorf("%w: %q", ErrBadHolder, id)
+	}
+	return nil
+}
+
 // ParseAsset accepts the canonical CODE-ISSUER form and validates both halves.
 func ParseAsset(s string) (mechanics.Asset, error) {
 	s = strings.TrimSpace(s)
@@ -126,4 +138,43 @@ func (s *Scanner) Scan(ctx context.Context, a mechanics.Asset) (*mechanics.Repor
 		return nil, err
 	}
 	return s.Engine.Run(ctx, sub)
+}
+
+// SubjectWithHolder fetches everything Subject does, then additionally fetches
+// the trustline state for holder if non-empty. When holder is empty the result
+// is identical to calling Subject.
+func (s *Scanner) SubjectWithHolder(ctx context.Context, a mechanics.Asset, holder string) (*mechanics.Subject, error) {
+	sub, err := s.Subject(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+	if holder == "" {
+		return sub, nil
+	}
+	sub.Holder = holder
+	tl, err := s.Horizon.Trustline(ctx, holder, a.Code, a.Issuer)
+	if errors.Is(err, horizon.ErrNotFound) {
+		// Holder does not hold the asset; HolderTrustline stays nil with no error.
+	} else if err != nil {
+		sub.HolderTrustlineErr = err.Error()
+	} else {
+		sub.HolderTrustline = tl
+	}
+	return sub, nil
+}
+
+// ScanWithHolder fetches and classifies an asset, optionally adding per-holder
+// trustline analysis when holder is non-empty. When holder is empty the result
+// is byte-identical to Scan.
+func (s *Scanner) ScanWithHolder(ctx context.Context, a mechanics.Asset, holder string) (*mechanics.Report, error) {
+	sub, err := s.SubjectWithHolder(ctx, a, holder)
+	if err != nil {
+		return nil, err
+	}
+	eng := s.Engine
+	if holder != "" {
+		eng = &mechanics.Engine{Checks: append([]mechanics.Check{}, s.Engine.Checks...)}
+		eng.Checks = append(eng.Checks, mechanics.TrustlineCheck{})
+	}
+	return eng.Run(ctx, sub)
 }
