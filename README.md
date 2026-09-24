@@ -66,6 +66,7 @@ carries an explicit, evaluated position on legitimate clawback use. See
 | [docs/deployment.md](docs/deployment.md) | Deployed addresses, attested assets, transaction hashes |
 | [docs/attestation-run.md](docs/attestation-run.md) | Every asset scanned, what each check returned, and what the run exposed about the scanner |
 | [docs/eval.md](docs/eval.md) | Labelled trap/legitimate set and current results |
+| [docs/freshness.md](docs/freshness.md) | How old an attestation may be: measured flag-change rates and window guidance per use class |
 | [docs/adding-a-check.md](docs/adding-a-check.md) | How to write a new mechanic check |
 
 ## Status
@@ -87,6 +88,8 @@ Four things are worth knowing before you rely on any of it:
   refreshing them on a schedule. Issuer flags can change after an attestation is
   written, so pass a `max_age_secs` you would actually accept rather than
   assuming someone is keeping the registry current.
+  [docs/freshness.md](docs/freshness.md) measures how often flags actually
+  change and recommends windows per use class.
 - **This is testnet, not mainnet.** One key can write any attestation, testnet
   is periodically reset, and Soroban entries expire if their TTL is not
   extended. Nothing here is ready for money.

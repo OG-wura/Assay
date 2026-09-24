@@ -1,5 +1,7 @@
 package mechanics
 
+import "fmt"
+
 // Severity is Assay's risk level for an asset.
 //
 // Severity is CAPABILITY-ONLY. It answers exactly one question: what is the
@@ -72,6 +74,33 @@ func (s Severity) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + s.String() + `"`), nil
 }
 
+// UnmarshalJSON parses the level name MarshalJSON emits.
+//
+// Marshal and unmarshal have to be symmetric, or a stored report document is
+// a one-way format: it could be written but never read back. The parse is
+// strict — anything that is not one of the five level names is an error
+// rather than a zero value, because a report whose severity cannot be parsed
+// must fail loudly, not silently read as clear. "unknown" is likewise
+// rejected: MarshalJSON only emits it for an out-of-range severity, which is
+// a bug state no report should be re-read into existence.
+func (s *Severity) UnmarshalJSON(b []byte) error {
+	switch string(b) {
+	case `"clear"`:
+		*s = Clear
+	case `"low"`:
+		*s = Low
+	case `"medium"`:
+		*s = Medium
+	case `"high"`:
+		*s = High
+	case `"critical"`:
+		*s = Critical
+	default:
+		return fmt.Errorf("mechanics: unknown severity %s", b)
+	}
+	return nil
+}
+
 // Mechanic is a bit in the mechanics bitset. The bit positions are part of the
 // contract ABI: do not renumber them.
 type Mechanic uint32
@@ -98,6 +127,16 @@ const (
 	// is_authorized unset: the holder cannot currently transact.
 	MechTrustlineDeauthorized Mechanic = 1 << 7
 )
+
+// CapabilityMask covers the mechanics that are issuer powers over holders:
+// the bits a consumer masks out of the report bitset to read the capability
+// the issuer holds on the ledger. It exists to state the escalation invariant
+// in code rather than as convention — a finding marked Escalation must carry
+// none of these bits, because reputation raising a level must never read as
+// the ledger granting a power. Engine.Run enforces this at runtime, and the
+// escalation tests enforce it across the eval fixtures. See
+// docs/severity-model.md.
+const CapabilityMask = MechAuthRequired | MechAuthRevocable | MechClawbackEnabled
 
 // ConfiscationMask covers the mechanics that let an issuer take a balance.
 // Any asset matching this mask has severity >= High by construction.

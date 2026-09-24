@@ -162,6 +162,13 @@ mask. Every capability bit does have a severity, so for the assets in the table
 above the mask appears to subsume it — right up to an asset like DOGE whose
 severity comes from somewhere the mask cannot see.
 
+On choosing `MAX_ATTESTATION_AGE`: [freshness.md](freshness.md) measures how
+often issuer flags actually change, names the use classes that need different
+windows, and marks every recommended number as a provisional default. Read it
+before picking a value — the short version is that a day is defensible for a
+custodial deposit gate, a fresh scan beats a cached attestation for one-shot
+settlements, and no window survives without a re-attestation path behind it.
+
 Then call it before you act, in the same transaction:
 
 ```rust
@@ -188,6 +195,7 @@ if !registry.is_safe(&asset, &2, &3600) {
 
 `max_age_secs = 0` disables the freshness check. Pass it only if you have
 decided that staleness is acceptable, not to make a test go green.
+[freshness.md](freshness.md) is the guidance for every other value.
 
 ## 4. Deploy against the live registry
 

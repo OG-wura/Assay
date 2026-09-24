@@ -72,7 +72,7 @@ func (c CapabilityCheck) Run(_ context.Context, s *Subject) (Finding, error) {
 		Source:      "horizon",
 		URL:         horizonAssetURL(s.Asset),
 		Claim:       "issuer flags: " + flagSummary(flags),
-		RetrievedAt: s.FetchedAt,
+		RetrievedAt: s.StatFetchedAt,
 	})
 
 	var b strings.Builder

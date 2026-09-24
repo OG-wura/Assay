@@ -39,6 +39,14 @@ type Evidence struct {
 	URL         string    `json:"url"`
 	Claim       string    `json:"claim"`
 	RetrievedAt time.Time `json:"retrieved_at"`
+	// Attempted marks evidence whose RetrievedAt is the time the fetch was
+	// ATTEMPTED, not the time the source answered: the fetch failed, so there
+	// is no completion time to record. The Claim of such evidence always reads
+	// "not retrievable: <reason>", but a consumer must not have to parse
+	// English to distinguish "this source said so at T" from "we asked at T
+	// and got nothing" — the same programmatic distinguishability rule the
+	// Undetermined flag follows for findings.
+	Attempted bool `json:"attempted"`
 }
 
 // Finding is one check's result.
@@ -75,28 +83,50 @@ type Finding struct {
 
 // Subject is the pre-fetched state a check reasons over. Checks must not reach
 // outside it.
+//
+// Every fetch records its own completion time, and every failed fetch records
+// its attempt time. Evidence.RetrievedAt must therefore come from the field
+// matching the source the evidence attributes — a claim is only as fresh as
+// the source that actually made it, and a StellarExpert answer that arrived
+// twenty seconds after the Horizon one must not report Horizon's instant.
 type Subject struct {
-	Asset  Asset
-	Stat   *horizon.AssetStat
-	Issuer *horizon.Account
+	Asset Asset
+	Stat  *horizon.AssetStat
+	// StatFetchedAt is when Horizon answered the /assets lookup.
+	StatFetchedAt time.Time
+	Issuer        *horizon.Account
+	// IssuerFetchedAt is when Horizon answered the issuer /accounts lookup.
+	IssuerFetchedAt time.Time
 
 	// Toml is the issuer's stellar.toml if it resolved. TomlErr records why it
 	// did not, and is reported verbatim rather than being smoothed over.
-	Toml    *sep1.Doc
-	TomlURL string
-	TomlErr string
+	// A resolved Doc carries its own FetchedAt; TomlAttemptedAt is when the
+	// fetch was attempted, used for failure evidence where no Doc exists.
+	Toml            *sep1.Doc
+	TomlURL         string
+	TomlErr         string
+	TomlAttemptedAt time.Time
 
 	// Directory and Blocked are the curated reputation signals. Each has an Err
 	// field for the same reason TomlErr exists: a nil entry means "not listed"
 	// only when the source actually answered. A nil entry with a non-empty Err
 	// means the source was never reached, which is a different fact and must
 	// not be allowed to render as the same one.
-	Directory    *stellarexpert.DirectoryEntry
-	DirectoryURL string
-	DirectoryErr string
-	Blocked      *stellarexpert.BlockedDomain
-	BlockedURL   string
-	BlockedErr   string
+	//
+	// The FetchedAt fields are when the source answered; the AttemptedAt fields
+	// are when it was asked and did not. AttemptedAt is always set (the attempt
+	// happened whether or not it succeeded), so failure evidence always has a
+	// time to carry.
+	Directory            *stellarexpert.DirectoryEntry
+	DirectoryURL         string
+	DirectoryErr         string
+	DirectoryFetchedAt   time.Time
+	DirectoryAttemptedAt time.Time
+	Blocked              *stellarexpert.BlockedDomain
+	BlockedURL           string
+	BlockedErr           string
+	BlockedFetchedAt     time.Time
+	BlockedAttemptedAt   time.Time
 
 	// Holder is the account ID of a specific holder when per-trustline analysis
 	// was requested. Empty when no holder was specified; the trustline check is
@@ -107,8 +137,17 @@ type Subject struct {
 	// HolderTrustlineErr records why it was not available.
 	HolderTrustline    *horizon.TrustlineBalance
 	HolderTrustlineErr string
+	// HolderFetchedAt is when Horizon answered the holder /accounts lookup;
+	// HolderAttemptedAt is when it was asked. The same success/failure split
+	// as above: an absent trustline (a nil entry with no error) still has a
+	// completion time — the source did answer, "not listed".
+	HolderFetchedAt   time.Time
+	HolderAttemptedAt time.Time
 
-	FetchedAt time.Time
+	// ScannedAt is when the scan started. It is the report-level timestamp:
+	// evidence carries the time of the source it came from, and the report
+	// carries the time the subject assembly began.
+	ScannedAt time.Time
 }
 
 // HomeDomain returns the issuer's advertised home_domain, if any.
@@ -195,7 +234,7 @@ func (e *Engine) Run(ctx context.Context, s *Subject) (*Report, error) {
 	rep := &Report{
 		Asset:              s.Asset,
 		Accountability:     AccountabilityUnknown,
-		ScannedAt:          s.FetchedAt,
+		ScannedAt:          s.ScannedAt,
 		Findings:           []Finding{},
 		Evidence:           []Evidence{},
 		UndeterminedChecks: []string{},
@@ -226,6 +265,20 @@ func (e *Engine) Run(ctx context.Context, s *Subject) (*Report, error) {
 
 		if f.Accountability != nil {
 			rep.Accountability = *f.Accountability
+		}
+		// The escalation invariant, enforced here rather than left as
+		// convention: a finding marked Escalation may raise the level and set
+		// non-capability bits (blocklisted), but must never set a capability
+		// bit. The on-chain gate masks CapabilityMask out of this bitset and
+		// trusts what it sees; an escalation finding carrying a capability bit
+		// would make the report assert a power the issuer does not hold on the
+		// ledger. Fail loudly instead of masking the bits away — silently
+		// dropping them would hide exactly the bug this guard exists to catch.
+		if f.Escalation && f.Mechanics&CapabilityMask != 0 {
+			return nil, fmt.Errorf(
+				"check %s: escalation finding sets capability bits %v; "+
+					"escalation must never grant a capability the issuer does not hold",
+				c.ID(), (f.Mechanics & CapabilityMask).Names())
 		}
 		rep.Mechanics |= f.Mechanics
 		rep.Findings = append(rep.Findings, f)

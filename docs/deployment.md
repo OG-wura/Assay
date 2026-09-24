@@ -252,7 +252,8 @@ hand-written severity reach the contract.
 - **No re-attestation schedule.** These attestations are as fresh as the
   `attested_at` in the table and nothing is refreshing them. A caller must pass
   a `max_age_secs` it is actually willing to accept rather than trusting that
-  someone is keeping the registry current.
+  someone is keeping the registry current. [freshness.md](freshness.md) has
+  the measured flag-change rates behind that advice.
 - **Testnet data is not durable.** Testnet is periodically reset, and Soroban
   persistent entries expire if their TTL is not extended. Both will take these
   attestations away without warning.

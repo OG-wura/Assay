@@ -94,6 +94,10 @@ contract constant. Assay does not silently serve stale safety, and it does not
 guess how fresh is fresh enough — a DEX listing gate and a large settlement have
 very different tolerances. `max_age_secs = 0` opts out explicitly.
 
+[freshness.md](freshness.md) is the guidance for picking a value: what changes
+under an attestation, how fast (measured, not guessed), and defensible windows
+per use class.
+
 ### The invariant is enforced twice
 
 `attest` rejects an attestation whose clawback bit is set below `SEVERITY_HIGH`.

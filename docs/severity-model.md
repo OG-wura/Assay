@@ -75,6 +75,28 @@ Every escalation is auditable: the report carries `base_severity` (capability
 alone) next to `severity` (after escalation) and a boolean `escalated`, so you
 can always see exactly what reputation contributed.
 
+### Escalation never sets a capability bit
+
+Stronger than the level rule, and the invariant the on-chain gate's correctness
+rests on: an escalation finding contributes **no capability bit** to the report
+bitset. Bits 0-2 (`auth_required`, `auth_revocable`, `auth_clawback_enabled`)
+are the ledger's own record of what the issuer can do, and `CapabilityMask`
+(names those three bits in `internal/mechanics/severity.go`) is how a consumer
+masks them out of the bitset to read that record. Reputation raising a level
+must never read as the ledger granting a power.
+
+Today reputation sets `blocklisted` (bit 5) on escalation — a non-capability
+bit, which is exactly the point: a CRITICAL asset with no auth flags must mask
+to an empty capability set, and it does.
+
+Nothing relies on convention here. `Engine.Run` rejects an escalation finding
+that carries any capability bit with an error rather than masking the bits and
+carrying on — silently dropping them would hide exactly the bug the guard
+exists to catch — and `TestEscalationNeverSetsCapabilityBits` asserts the
+invariant across every eval fixture and over hand-built escalated subjects,
+with a negative test proving the assertion fires on a deliberately bugged
+finding.
+
 ## Rule 3: accountability is reported, never discounted
 
 Reciprocal SEP-1 verification produces `verified`, `unverified`, or `unknown`.
