@@ -124,13 +124,39 @@ func TestJSONTimestampUnmarshalRejectsMalformed(t *testing.T) {
 	for _, bad := range []string{
 		"2026-09-24 12:00:00Z", // space instead of T
 		"2026-09-24T12:00:00",  // missing zone
-		"2026-09-24T12:00:00+25:00",
 		"not-a-time",
 		"2016-12-31T23:59:60Z", // leap second: real UTC cannot represent it, and Go must refuse rather than fold it
 	} {
 		var rep mechanics.Report
 		if err := json.Unmarshal([]byte(`{"scanned_at":"`+bad+`"}`), &rep); err == nil {
 			t.Errorf("scanned_at %q was accepted by the JSON boundary", bad)
+		}
+	}
+}
+
+// TestJSONTimestampUnmarshalMatchesToolchainOffsetRange pins the one RFC 3339
+// rule whose enforcement moved under us: RFC 3339 forbids UTC offsets outside
+// ±23:59, and Go learned to reject them in json.Unmarshal and time.Parse
+// between 1.22 (which happily parsed "+25:00" as a fixed zone) and 1.27
+// (which refuses it). CI builds with the toolchain go.mod pins, so the JSON
+// boundary must agree with whatever that toolchain's time.Parse does — never
+// stricter, never looser. This test reads the boundary's position directly
+// from the toolchain, so it passes on either side of the change and fails
+// loudly if encoding/json ever diverges from time.Parse again.
+func TestJSONTimestampUnmarshalMatchesToolchainOffsetRange(t *testing.T) {
+	cases := []string{
+		"2026-09-24T12:00:00+25:00",
+		"2026-09-24T12:00:00-25:00",
+		"2026-09-24T12:00:00+23:59", // in range: must always be accepted
+	}
+	for _, s := range cases {
+		_, parseErr := time.Parse(time.RFC3339, s)
+		want := parseErr == nil // what the toolchain itself says the string is worth
+		var rep mechanics.Report
+		err := json.Unmarshal([]byte(`{"scanned_at":"`+s+`"}`), &rep)
+		got := err == nil
+		if got != want {
+			t.Errorf("scanned_at %q: JSON boundary says accepted=%v, toolchain time.Parse says %v; encoding/json has diverged from time.Parse", s, got, want)
 		}
 	}
 }
